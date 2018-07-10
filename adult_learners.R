@@ -1,4 +1,5 @@
-
+install.packages("data.table")
+install.packages("RODBC")
 
 library(RODBC)
 
@@ -13,26 +14,52 @@ library(RODBC)
 # C<yyyy>DEP: Number of programs offered and number of programs offered via distance 
 # education
 # FLAGS<YYYY>: Student response information
+# DRVEF<yyyy>: Frequently derived variable for fall enrollment
+# FLAGS<yyyy>: Response status for all survey components
 
 
 
 
 IPEDS_path <- "../IPEDS-Adult-Learners/IPEDS_db/"
 IPEDS_files <- list.files(path = IPEDS_path, pattern = "[^l]accdb")
+IPEDS_years <- stringr::str_sub(IPEDS_files, 6, 9)
+IPEDS_tables <- c("FLAGS")
+IPEDS_tables <- data.frame(name = c("FLAGS<yyyy>",
+                                    "EF<yyyy>B"),
+                           description = c("Response status for all survey components",
+                                           "Age category, gender, attendance status, and level of student: Fall 2014 (optional)"),
+                           fieldlookup = c("FLAGS",
+                                           "EFB"),
+                           stringsAsFactors = FALSE)
 
-#for (i in 1:length(IPEDS_files)) {
-for (i in 1:1) {
+IPEDS_fields <- list(ID = c("EFB"),
+                     field_orig = list(c("LSTUDY","EFBAGE","EFAGE09","EFAGE07","EFAGE08","EFAGE05","EFAGE01","EFAGE02","EFAGE06","EFAGE03","EFAGE04","LINE")),
+                     field_new  = list(c("Level of student","Age category","Grand total","Total men","Total women","Full time total","Full time men","Full time women","Part time total","Part time men","Part time women","Original line number on survey form")))
+
+# Loop through each year 
+for (i in 1:length(IPEDS_years)) {
   db <- paste(IPEDS_path,IPEDS_files[i], sep = "")
   channel <- odbcConnectAccess2007(db)
   #table <- sqlFetch(channel, "C2014_A")
-  assign(substr(IPEDS_files[1],1,regexpr('[.]',IPEDS_files[1])-1), sqlFetch(channel, "C2014_A"))
+  for (j in 1:length(IPEDS_tables$name)) {
+    #assign(substr(IPEDS_files[1],1,regexpr('[.]',IPEDS_files[1])-1), sqlFetch(channel, paste(IPEDS_tables[1],IPEDS_years[i], sep = "")))
+    #assign(paste(IPEDS_tables$name[j],IPEDS_years[i], sep = ""),
+    #       sqlFetch(channel,paste(IPEDS_tables$name[j],IPEDS_years[i], sep = "")))
+    assign(stringr::str_replace(IPEDS_tables$name[j], pattern = "<yyyy>", replacement = IPEDS_years[i]),
+          sqlFetch(channel,stringr::str_replace(IPEDS_tables$name[j], pattern = "<yyyy>", replacement = IPEDS_years[i])))
+  }
   close(channel)
 }
 
-#db <-file.path("../IPEDS-Adult-Learners/IPEDS_db/IPEDS201415.accdb")
-#db <- IPEDS_files[1]
-#channel <- odbcConnectAccess2007(db)
+# Format EF<yyyy>B tables - Age category, gender, attendance status, and level of student: Fall 2014 (optional)
 
-#tb_C2016_A <- sqlFetch(channel, "C2016_A")
+# Rename headers
+EFB_headers <- data.frame(varname=c("LSTUDY","EFBAGE","EFAGE09","EFAGE07","EFAGE08","EFAGE05","EFAGE01","EFAGE02","EFAGE06","EFAGE03","EFAGE04","LINE"),
+                          vartitle=c("Level of student","Age category","Grand total","Total men","Total women","Full time total","Full time men","Full time women","Part time total","Part time men","Part time women","Original line number on survey form"),
+                          stringsAsFactors = FALSE)
 
-#close(channel)
+data.table::setnames(EF2014B, old = EFB_headers$varname, new=EFB_headers$vartitle)
+
+
+
+
